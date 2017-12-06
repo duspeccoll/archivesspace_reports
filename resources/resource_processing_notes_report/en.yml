@@ -1,0 +1,5 @@
+en:
+  reports:
+    resource_processing_notes_report:
+      title: Resource Processing Notes Report
+      description: "Returns processing notes assigned at the collection level to ArchivesSpace resources."

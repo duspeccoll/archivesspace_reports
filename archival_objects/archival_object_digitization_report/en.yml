@@ -1,0 +1,5 @@
+en:
+  reports:
+    archival_object_digitization_report: 
+      title: Archival Object Digitization Report
+      description: "Displays a list of archival objects that have been digitized, including their call numbers, URLs, and linked digital objects (if available)."

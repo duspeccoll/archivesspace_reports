@@ -1,0 +1,5 @@
+en:
+  reports:
+    resource_audit_report:
+      title: Resource Audit Report
+      description: "Returns metadata for the desired level of bibliographic description, to assist in minimal bibliographic description audits"
