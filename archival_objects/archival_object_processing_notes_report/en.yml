@@ -1,5 +1,0 @@
-en:
-  reports:
-    archival_object_processing_notes_report:
-      title: Archival Object Processing Notes Report
-      description: "Returns processing notes assigned at the archival object level."

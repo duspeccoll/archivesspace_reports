@@ -8,29 +8,44 @@ class ResourceProcessingNotesReport < AbstractReport
 
   def processor
   	{
-  		'call_number' => proc {|record| parse_identifier(record[:identifier])}
+  		'call_number' => proc {|record| parse_identifier(record[:type], record[:identifier])}
   	}
   end
 
   def query
     repo_id = @params[:repo_id]
 
-    db[:resource]
+    resources = db[:resource]
     	.select(Sequel.as(:identifier, :identifier),
+              Sequel.as('resource', :type),
     					Sequel.as(:title, :title),
     					Sequel.as(:repository_processing_note, :processing_note))
     	.filter(:repo_id => repo_id)
     	.exclude(:repository_processing_note => nil)
-      .order(Sequel.asc(:identifier))
+
+    archival_objects = db[:archival_object]
+    	.select(Sequel.as(:component_id, :identifier),
+              Sequel.as('archival_object', :type),
+    		      Sequel.as(:title, :title),
+    		      Sequel.as(:repository_processing_note, :processing_note))
+    	.filter(:repo_id => repo_id)
+    	.exclude(:repository_processing_note => nil)
+
+    resources
+      .union(archival_objects)
    end
 
    private
 
-   def parse_identifier(s)
+   def parse_identifier(type, s)
    	if ASUtils.blank?(s)
    		s
    	else
-   		id = ASUtils.json_parse(s).compact[0]
+      if type == 'resource'
+   		   ASUtils.json_parse(s).compact[0]
+      else
+        s
+      end
     end
   end
 
