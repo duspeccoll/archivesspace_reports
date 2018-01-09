@@ -80,24 +80,49 @@ class AgentReport < AbstractReport
 
   def verify_source(source, url)
     locals = ['ingest', 'local', 'prov']
-    # TODO: I know the prefix for NAD is wrong, I'm just pretty sure ours are all LCNAF entries
     uri_prefix = {
-      'nad' => "http://id.loc.gov/authorities/names",
-      'naf' => "http://id.loc.gov/authorities/names",
-      'ulan' => "http://vocab.getty.edu/ulan",
-      'lcsh' => "http://id.loc.gov/authorities/subjects",
-      'viaf' => "http://viaf.org/viaf"
+      'naf' => "http://id.loc.gov/authorities/names/",
+      'ulan' => "http://vocab.getty.edu/ulan/",
+      'lcsh' => "http://id.loc.gov/authorities/subjects/",
+      'viaf' => "http://viaf.org/viaf/"
     }
 
+    # automatically verify the URI if it's local
+    return "OK" if locals.include?(source)
+
+    # a non-local source can't have an empty Authority ID
     if ASUtils.blank?(url)
-      locals.include?(source) ? url : "ERROR: Authority ID must be present if a non-local source is declared"
+      "Authority ID must be present if a non-local source is declared"
     else
-      if locals.include?(source)
-        "Success"
-      else
-        prefix = uri_prefix[source]
-        url.start_with?(prefix) ? "Success" : "ERROR: Authority ID for #{source} must begin with #{prefix}"
+      # verify the Authority IDs that do exist
+      begin
+        if uri_prefix[source].nil?
+          "No URI prefix found for #{source}"
+        else
+          s = "#{uri_prefix[source]}#{url}"
+          query_uri(s)
+        end
+      rescue StandardError => e
+        e
       end
+    end
+  end
+
+  def query_uri(s)
+    # VIAF requires a trailing forward slash for some reason
+    s << "/" if s.start_with?("http://viaf.org/viaf")
+
+    resp = Net::HTTP.get_response(URI(s))
+    case resp
+    when Net::HTTPSuccess then
+      "OK"
+    when Net::HTTPRedirection then
+      s = resp['location']
+      query_uri(s)
+    when Net::HTTPNotFound then
+      "No record with that Authority ID found"
+    else
+      "Error: #{s} (#{resp.code})"
     end
   end
 end
