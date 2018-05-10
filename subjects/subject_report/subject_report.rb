@@ -3,7 +3,13 @@ class SubjectReport < AbstractReport
   register_report
 
   def headers
-    ['heading', 'source', 'authority_id', 'scope_note', 'first_term_type', 'linked_records']
+    ['uri', 'heading', 'source', 'authority_id', 'scope_note', 'first_term_type', 'linked_records']
+  end
+
+  def processor
+    {
+      'uri' => proc {|record| "/subjects/#{record[:id]}"}
+    }
   end
 
   def query
@@ -25,7 +31,8 @@ class SubjectReport < AbstractReport
       .left_outer_join(:enumeration_value, {:id => :subject__source_id}, :table_alias => :source)
       .left_outer_join(first_term_types, {:id => :subject__id}, :table_alias => :first_term_type)
       .left_outer_join(linked_records, {:id => :subject__id}, :table_alias => :linked_record)
-      .select(Sequel.as(:subject__title, :heading),
+      .select(Sequel.as(:subject__id, :id),
+        Sequel.as(:subject__title, :heading),
         Sequel.as(:source__value, :source),
         Sequel.as(:subject__authority_id, :authority_id),
         Sequel.as(:subject__scope_note, :scope_note),
