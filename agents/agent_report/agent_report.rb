@@ -3,13 +3,7 @@ class AgentReport < AbstractReport
   register_report
 
   def headers
-    ['name', 'type', 'links', 'source', 'url', 'verified']
-  end
-
-  def processor
-    {
-      'verified' => proc {|record| verify_source(record[:source], record[:url])}
-    }
+    ['uri', 'heading', 'type', 'source', 'authority_id', 'linked_records']
   end
 
   def query
@@ -28,11 +22,12 @@ class AgentReport < AbstractReport
       .filter(db[:user]
         .filter(:agent_record_id => :name_person__agent_person_id)
         .select(:agent_record_id) => nil)
-      .select(Sequel.as(:name_person__sort_name, :name),
+      .select(Sequel.as(Sequel.lit("concat('/agents/people/',agent_person.id)"), :uri),
+              Sequel.as(:name_person__sort_name, :heading),
               Sequel.as('person', :type),
-              Sequel.as(:people_links__links, :links),
               Sequel.as(:source__value, :source),
-              Sequel.as(:name_authority_id__authority_id, :url))
+              Sequel.as(:name_authority_id__authority_id, :authority_id),
+              Sequel.as(:people_links__links, :linked_records))
 
     corporate_links = db[:agent_corporate_entity]
       .left_outer_join(:linked_agents_rlshp, :agent_corporate_entity_id => :agent_corporate_entity__id)
@@ -46,11 +41,12 @@ class AgentReport < AbstractReport
       .left_outer_join(:enumeration_value, {:id => :name_corporate_entity__source_id}, :table_alias => :source)
       .left_outer_join(:name_authority_id, :name_corporate_entity_id => :name_corporate_entity__id)
       .filter(:name_corporate_entity__is_display_name => 1)
-      .select(Sequel.as(:name_corporate_entity__sort_name, :name),
+      .select(Sequel.as(Sequel.lit("concat('/agents/corporate_entities/',agent_corporate_entity.id)"), :uri),
+              Sequel.as(:name_corporate_entity__sort_name, :heading),
               Sequel.as('corporate_entity', :type),
-              Sequel.as(:corporate_links__links, :links),
               Sequel.as(:source__value, :source),
-              Sequel.as(:name_authority_id__authority_id, :url))
+              Sequel.as(:name_authority_id__authority_id, :authority_id),
+              Sequel.as(:corporate_links__links, :linked_records))
 
     families_links = db[:agent_family]
       .left_outer_join(:linked_agents_rlshp, :agent_family_id => :agent_family__id)
@@ -64,65 +60,14 @@ class AgentReport < AbstractReport
       .left_outer_join(:enumeration_value, {:id => :name_family__source_id}, :table_alias => :source)
       .left_outer_join(:name_authority_id, :name_family_id => :name_family__id)
       .filter(:name_family__is_display_name => 1)
-      .select(Sequel.as(:name_family__sort_name, :name),
+      .select(Sequel.as(Sequel.lit("concat('/agents/families/',agent_family.id)"), :uri),
+              Sequel.as(:name_family__sort_name, :heading),
               Sequel.as('family', :type),
-              Sequel.as(:families_links__links, :links),
               Sequel.as(:source__value, :source),
-              Sequel.as(:name_authority_id__authority_id, :url))
+              Sequel.as(:name_authority_id__authority_id, :authority_id),
+              Sequel.as(:families_links__links, :linked_records))
 
-    people
-      .union(corporate)
-      .union(families)
-      .order(Sequel.asc(:name))
-  end
+    people.union(corporate).union(families).order(Sequel.asc(:heading))
 
-  private
-
-  def verify_source(source, url)
-    locals = ['ingest', 'local', 'prov']
-    uri_prefix = {
-      'naf' => "http://id.loc.gov/authorities/names/",
-      'ulan' => "http://vocab.getty.edu/ulan/",
-      'lcsh' => "http://id.loc.gov/authorities/subjects/",
-      'viaf' => "http://viaf.org/viaf/"
-    }
-
-    # automatically verify the URI if it's local
-    return "OK" if locals.include?(source)
-
-    # a non-local source can't have an empty Authority ID
-    if ASUtils.blank?(url)
-      "Authority ID must be present if a non-local source is declared"
-    else
-      # verify the Authority IDs that do exist
-      begin
-        if uri_prefix[source].nil?
-          "No URI prefix found for #{source}"
-        else
-          s = "#{uri_prefix[source]}#{url}"
-          query_uri(s)
-        end
-      rescue StandardError => e
-        e
-      end
-    end
-  end
-
-  def query_uri(s)
-    # VIAF requires a trailing forward slash for some reason
-    s << "/" if s.start_with?("http://viaf.org/viaf")
-
-    resp = Net::HTTP.get_response(URI(s))
-    case resp
-    when Net::HTTPSuccess then
-      "OK"
-    when Net::HTTPRedirection then
-      s = resp['location']
-      query_uri(s)
-    when Net::HTTPNotFound then
-      "No record with that Authority ID found"
-    else
-      "Error: #{s} (#{resp.code})"
-    end
   end
 end
