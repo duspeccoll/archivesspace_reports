@@ -3,7 +3,7 @@ class ArchivalObjectDigitizationReport < AbstractReport
   register_report
 
   def headers
-    ['title', 'component_id', 'location', 'url']
+    ['uri', 'title', 'component_id', 'location', 'url']
   end
 
   def query
@@ -23,7 +23,8 @@ class ArchivalObjectDigitizationReport < AbstractReport
     db[:archival_object]
       .left_outer_join(locations, {:id => :archival_object__id}, :table_alias => :location)
       .left_outer_join(digital_objects, {:id => :archival_object__id}, :table_alias => :digital_object)
-      .select(Sequel.as(:archival_object__title, :title),
+      .select(Sequel.as(Sequel.lit("concat('/repositories/2/archival_objects/',archival_object.id)"), :uri),
+              Sequel.as(:archival_object__title, :title),
               Sequel.as(:archival_object__component_id, :component_id),
               Sequel.as(:location__location, :location),
               Sequel.as(:digital_object__url, :url))
