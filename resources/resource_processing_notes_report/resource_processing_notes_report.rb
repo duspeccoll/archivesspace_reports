@@ -2,51 +2,34 @@ class ResourceProcessingNotesReport < AbstractReport
 
   register_report
 
-  def headers
-    ['call_number', 'title', 'processing_note']
+  def fix_row(row)
+    clean_row(row)
   end
 
-  def processor
-  	{
-  		'call_number' => proc {|record| parse_identifier(record[:type], record[:identifier])}
-  	}
+  def query_string
+    "(select
+      identifier,
+      'Resource' as type,
+      title,
+      repository_processing_note as processing_note
+    from resource
+    where repo_id = #{db.literal(@repo_id)}
+    and repository_processing_note is not null)
+
+    union
+
+    (select
+      component_id as identifier,
+      'Archival Object' as type,
+      title,
+      repository_processing_note as processing_note
+    from archival_object
+    where repo_id = #{db.literal(@repo_id)}
+    and repository_processing_note is not null)"
   end
 
-  def query
-    repo_id = @params[:repo_id]
-
-    resources = db[:resource]
-    	.select(Sequel.as(:identifier, :identifier),
-              Sequel.as('resource', :type),
-    					Sequel.as(:title, :title),
-    					Sequel.as(:repository_processing_note, :processing_note))
-    	.filter(:repo_id => repo_id)
-    	.exclude(:repository_processing_note => nil)
-
-    archival_objects = db[:archival_object]
-    	.select(Sequel.as(:component_id, :identifier),
-              Sequel.as('archival_object', :type),
-    		      Sequel.as(:title, :title),
-    		      Sequel.as(:repository_processing_note, :processing_note))
-    	.filter(:repo_id => repo_id)
-    	.exclude(:repository_processing_note => nil)
-
-    resources
-      .union(archival_objects)
-   end
-
-   private
-
-   def parse_identifier(type, s)
-   	if ASUtils.blank?(s)
-   		s
-   	else
-      if type == 'resource'
-   		   ASUtils.json_parse(s).compact[0]
-      else
-        s
-      end
-    end
+  def clean_row(row)
+    ReportUtils.fix_identifier_format(row, :identifier) if row[:type] == 'Resource'
   end
 
 end

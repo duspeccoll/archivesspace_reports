@@ -1,66 +1,115 @@
 class AccessionReport < AbstractReport
-
   register_report
 
-  def headers
-    ['id', 'title', 'identifier', 'created_by', 'created_at', 'accession_date', 'description', 'inventory', 'linear_feet', 'items', 'resources']
-  end
-
-  def processor
-    {
-      'identifier' => proc {|record| parse_identifier(record[:accession_identifier])}
-    }
+  def fix_row(row)
+    clean_row(row)
+    add_sub_reports(row)
   end
 
   def query
-    repo_id = @params[:repo_id]
-
-    related_resources = db[:spawned_rlshp]
-      .left_outer_join(:resource, :id => :spawned_rlshp__resource_id)
-      .select(Sequel.as(:spawned_rlshp__accession_id, :accession_id))
-      .select_more{Sequel.as(group_concat(replace(replace(:resource__identifier, '["',''),'",null,null,null]','')), :resources)}
-      .group_by(:spawned_rlshp__accession_id)
-
-    linear_feet = db[:extent]
-      .left_outer_join(:enumeration_value, :id => :extent__extent_type_id)
-      .select(Sequel.as(:extent__accession_id, :accession_id),
-              Sequel.as(Sequel.lit("concat(extent.number, ' ', replace(enumeration_value.value, '_', ' '))"), :extent))
-      .exclude(:extent__accession_id => nil)
-      .where(:enumeration_value__value => 'linear_feet')
-
-    items = db[:extent]
-      .left_outer_join(:enumeration_value, :id => :extent__extent_type_id)
-      .select(Sequel.as(:extent__accession_id, :accession_id),
-              Sequel.as(Sequel.lit("concat(extent.number, ' ', replace(enumeration_value.value, '_', ' '))"), :extent))
-      .exclude(:extent__accession_id => nil)
-      .where(:enumeration_value__value => 'items')
-
-    db[:accession]
-      .left_outer_join(related_resources, {:accession_id => :accession__id}, :table_alias => :related_resources)
-      .left_outer_join(linear_feet, {:accession_id => :accession__id}, :table_alias => :linear_feet)
-      .left_outer_join(items, {:accession_id => :accession__id}, :table_alias => :items)
-      .select(Sequel.as(:accession__id, :id),
-              Sequel.as(:accession__title, :title),
-              Sequel.as(:accession__identifier, :accession_identifier),
-              Sequel.as(:accession__created_by, :created_by),
-              Sequel.as(:accession__create_time, :created_at),
-              Sequel.as(:accession__accession_date, :accession_date),
-              Sequel.as(:accession__content_description, :description),
-              Sequel.as(:accession__inventory, :inventory),
-              Sequel.as(:linear_feet__extent, :linear_feet),
-              Sequel.as(:items__extent, :items),
-              Sequel.as(:related_resources__resources, :resources))
-      .filter(:accession__repo_id => repo_id)
+    results = db.fetch(query_string)
+    info[:number_of_accessions] = results.count
+    results
   end
 
-  private
+  def query_string
+    "select
+      id as accession_id,
+      concat('/repositories/#{@repo_id}/accessions/', id) as uri,
+      identifier as accession_number,
+      title as record_title,
+      accession_date as accession_date,
+      general_note,
+      container_summary,
+      date_expression,
+      begin_date,
+      end_date,
+      bulk_begin_date,
+      bulk_end_date,
+      acquisition_type_id as acquisition_type,
+      retention_rule,
+      content_description as description_note,
+      condition_description as condition_note,
+      inventory,
+      disposition as disposition_note,
+      restrictions_apply,
+      access_restrictions,
+      access_restrictions_note,
+      use_restrictions,
+      use_restrictions_note,
+      ifnull(rights_transferred, false) as rights_transferred,
+      rights_transferred_note,
+      ifnull(acknowledgement_sent, false) as acknowledgement_sent
+    from accession natural left outer join
 
-  def parse_identifier(s)
-    if ASUtils.blank?(s)
-      s
-    else
-      id = ASUtils.json_parse(s).compact[0]
-    end
+      (select
+        accession_id as id,
+        GROUP_CONCAT(distinct extent.container_summary SEPARATOR ', ') as container_summary
+      from extent
+      group by accession_id) as extent_cnt
+
+      natural left outer join
+      (select
+        accession_id as id,
+        group_concat(distinct expression separator ', ') as date_expression,
+        group_concat(distinct begin separator ', ') as begin_date,
+        group_concat(distinct end separator ', ') as end_date
+      from date, enumeration_value
+      where date.date_type_id = enumeration_value.id and enumeration_value.value = 'inclusive'
+      group by accession_id) as inclusive_date
+
+      natural left outer join
+      (select
+        accession_id as id,
+        group_concat(distinct begin separator ', ') as bulk_begin_date,
+        group_concat(distinct end separator ', ') as bulk_end_date
+        from date, enumeration_value
+        where date.date_type_id = enumeration_value.id and enumeration_value.value = 'bulk'
+        group by accession_id) as bulk_date
+
+      natural left outer join
+      (select
+        accession_id as id,
+        count(*) != 0 as rights_transferred,
+        group_concat(outcome_note separator ', ') as rights_transferred_note
+      from event_link_rlshp, event, enumeration_value
+      where event_link_rlshp.event_id = event.id
+        and event.event_type_id = enumeration_value.id and enumeration_value.value = 'copyright_transfer'
+      group by event_link_rlshp.accession_id) as rights_transferred
+
+      natural left outer join
+      (select
+        accession_id as id,
+        count(*) != 0 as acknowledgement_sent
+      from event_link_rlshp, event, enumeration_value
+      where event_link_rlshp.event_id = event.id
+        and event.event_type_id = enumeration_value.id and enumeration_value.value = 'acknowledgement_sent'
+      group by event_link_rlshp.accession_id) as acknowledgement_sent
+
+    where accession.repo_id = #{db.literal(@repo_id)}"
   end
 
+  def clean_row(row)
+    ReportUtils.fix_identifier_format(row, :accession_number)
+    ReportUtils.get_enum_values(row, [:acquisition_type])
+    ReportUtils.fix_boolean_fields(row, %i[restrictions_apply
+                                           access_restrictions use_restrictions
+                                           rights_transferred
+                                           acknowledgement_sent])
+  end
+
+  def add_sub_reports(row)
+    id = row[:accession_id]
+    row[:linear_feet] = AccessionExtentTypeSubreport.new(self, id, 'linear_feet').get_content
+    row[:items] = AccessionExtentTypeSubreport.new(self, id, 'items').get_content
+    row[:deaccessions] = AccessionDeaccessionsSubreport.new(self, id).get_content
+    row[:locations] = AccessionLocationsSubreport.new(self, id).get_content
+    row[:names] = AccessionNamesSubreport.new(self, id).get_content
+    row[:subjects] = AccessionSubjectsSubreport.new(self, id).get_content
+    row.delete(:accession_id)
+  end
+
+  def identifier_field
+    :accession_number
+  end
 end
