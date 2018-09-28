@@ -15,7 +15,7 @@ class SubjectListReport < AbstractReport
       left outer join (
         select
           subject.id as id,
-          term.id as term_type_id
+          term.term_type_id as term_type_id
         from subject
           left outer join subject_term
             on subject_term.subject_id = subject.id
