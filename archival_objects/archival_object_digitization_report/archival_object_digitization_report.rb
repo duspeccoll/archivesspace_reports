@@ -2,42 +2,42 @@ class ArchivalObjectDigitizationReport < AbstractReport
 
   register_report
 
-  def headers
-    ['uri', 'title', 'component_id', 'location', 'url', 'is_representative']
+  def fix_row(row)
+    ReportUtils.fix_boolean_fields(row, %i[representative])
   end
 
-  def processor
-    {
-      'is_representative' => proc {|record| record[:representative].nil? ? false : true}
-    }
-  end
-
-  def query
-    repo_id = @params.fetch(:repo_id)
-
-    locations = db[:external_document]
-      .select(Sequel.as(:archival_object_id, :id),
-              Sequel.as(:location, :location))
-      .where(:title => "Special Collections @ DU")
-
-    digital_objects = db[:instance]
-      .left_outer_join(:instance_do_link_rlshp, :instance_id => :instance__id)
-      .left_outer_join(:digital_object, :id => :instance_do_link_rlshp__digital_object_id)
-      .select(Sequel.as(:instance__archival_object_id, :id),
-              Sequel.as(:digital_object__digital_object_id, :url),
-              Sequel.as(:instance__is_representative, :is_representative))
-
-    db[:archival_object]
-      .left_outer_join(locations, {:id => :archival_object__id}, :table_alias => :location)
-      .left_outer_join(digital_objects, {:id => :archival_object__id}, :table_alias => :digital_object)
-      .select(Sequel.as(Sequel.lit("concat('/repositories/2/archival_objects/',archival_object.id)"), :uri),
-              Sequel.as(:archival_object__title, :title),
-              Sequel.as(:archival_object__component_id, :component_id),
-              Sequel.as(:location__location, :location),
-              Sequel.as(:digital_object__url, :url),
-              Sequel.as(:digital_object__is_representative, :representative))
-      .filter(:archival_object__repo_id => repo_id)
-      .exclude(:location__location => nil)
+  def query_string
+    "select
+      concat('/repositories/#{@repo_id}/archival_objects/', archival_object.id) as uri,
+      archival_object.title as title,
+      archival_object.component_id as component_id,
+      locations.location as location,
+      digital_objects.url as url,
+      digital_objects.representative as representative
+    from archival_object
+      left outer join (
+        select
+          archival_object_id as id,
+          location as location
+        from external_document
+        where location is not null
+          and title = 'Special Collections @ DU'
+      ) as locations
+        on locations.id = archival_object.id
+      left outer join (
+        select
+          instance.archival_object_id as id,
+          digital_object.digital_object_id as url,
+          instance.is_representative as representative
+        from instance
+          left outer join instance_do_link_rlshp
+            on instance_do_link_rlshp.instance_id = instance.id
+          left outer join digital_object
+            on digital_object.id = instance_do_link_rlshp.digital_object_id
+      ) as digital_objects
+        on digital_objects.id = archival_object.id
+    where archival_object.repo_id = #{db.literal(@repo_id)}
+      and locations.location is not null"
   end
 
 end

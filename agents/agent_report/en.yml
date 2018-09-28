@@ -1,5 +1,0 @@
-en:
-  reports:
-    agent_report:
-      title: Agent Report
-      description: Lists agent name, count of linked records, and validated source/authority ID.
