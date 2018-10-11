@@ -1,0 +1,27 @@
+en:
+  reports:
+    accession_report:
+      title: Accession Report
+      description: Displays all accessions for a given repository. Report includes data entered into basic information fields for each accession.
+      identifier_prefix: Accession
+    agent_list_report:
+      title: Name Authority List
+      description: Displays selected name record(s). Report lists name, name type, and name source.
+    archival_object_digitization_report:
+      title: Archival Object Digitization Report
+      description: "Displays a list of archival objects that have been digitized, including their call numbers, URLs, and linked digital objects (if available)."
+    event_report:
+      title: Event Report
+      description: "Returns metadata for events and their outcomes in ArchivesSpace"
+    resource_audit_report:
+      title: Resource Audit Report
+      description: "Returns metadata for the desired level of bibliographic description, to assist in minimal bibliographic description audits"
+    resource_processing_notes_report:
+      title: Processing Notes Report
+      description: "Returns all processing notes associated with collections and collection components."
+    subject_list_report:
+      title: Subject Headings List
+      description: Displays selected subject record(s). Report lists subject term, subject term type, and subject source.
+    top_container_list_report:
+      title: Top Container List
+      description: "Displays a list of top containers in the selected repository, including their locations, barcodes, indicators, profiles, and any associated Resources."

@@ -1,5 +1,0 @@
-en:
-  reports:
-    resource_processing_notes_report:
-      title: Processing Notes Report
-      description: "Returns all processing notes associated with collections and collection components."

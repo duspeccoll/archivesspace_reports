@@ -1,5 +1,0 @@
-en:
-  reports:
-    top_container_list_report: 
-      title: Top Container List
-      description: "Displays a list of top containers in the selected repository, including their locations, barcodes, indicators, profiles, and any associated Resources."
