@@ -39,7 +39,8 @@ class AccessionReport < AbstractReport
       use_restrictions_note,
       ifnull(rights_transferred, false) as rights_transferred,
       rights_transferred_note,
-      ifnull(acknowledgement_sent, false) as acknowledgement_sent
+      ifnull(acknowledgement_sent, false) as acknowledgement_sent,
+      title_status
     from accession natural left outer join
 
       (select
@@ -86,6 +87,13 @@ class AccessionReport < AbstractReport
         and event.event_type_id = enumeration_value.id and enumeration_value.value = 'acknowledgement_sent'
       group by event_link_rlshp.accession_id) as acknowledgement_sent
 
+      natural left outer join
+      (select
+        accession_id as id,
+        value as title_status
+      from user_defined, enumeration_value
+      where enumeration_value.id=user_defined.enum_3_id) as title_status
+
     where accession.repo_id = #{db.literal(@repo_id)}"
   end
 
@@ -104,7 +112,7 @@ class AccessionReport < AbstractReport
     row[:items] = AccessionExtentTypeSubreport.new(self, id, 'items').get_content
     row[:deaccessions] = AccessionDeaccessionsSubreport.new(self, id).get_content
     row[:locations] = AccessionLocationsSubreport.new(self, id).get_content
-    row[:names] = AccessionNamesSubreport.new(self, id).get_content
+    row[:names] = AccessionDisplayNamesSubreport.new(self, id).get_content
     row[:subjects] = AccessionSubjectsSubreport.new(self, id).get_content
     row.delete(:accession_id)
   end
